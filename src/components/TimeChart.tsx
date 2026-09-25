@@ -32,6 +32,28 @@ export function scaleToExactRange(
   return { fromUnixMs, toUnixMs };
 }
 
+export function formatTimeAxisValues(
+  localeTag: string,
+  timezone: string,
+  dataDurationMs: number,
+  visibleMinSeconds: number | undefined,
+  visibleMaxSeconds: number | undefined,
+  splits: number[],
+): string[] {
+  const visibleDurationMs = Number.isFinite(visibleMinSeconds) && Number.isFinite(visibleMaxSeconds)
+    ? Math.max(0, visibleMaxSeconds! - visibleMinSeconds!) * 1000
+    : dataDurationMs;
+  const formatter = new Intl.DateTimeFormat(localeTag, {
+    timeZone: timezone,
+    ...(visibleDurationMs <= 2 * 86_400_000
+      ? { hour: '2-digit', minute: '2-digit' }
+      : visibleDurationMs <= 120 * 86_400_000
+        ? { day: '2-digit', month: 'short' }
+        : { month: 'short', year: '2-digit' }),
+  });
+  return splits.map((value) => formatter.format(value * 1000));
+}
+
 export function TimeChart({ chartId, title, buckets, series, timezone, locale, appliedRange, proposal,
   resetVersion, applying, onZoom, onApplyZoom, onResetZoom, kind = 'line' }: {
   chartId: string;
@@ -75,14 +97,6 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
     }));
     const localeTag = locale === 'de' ? 'de-AT' : 'en-GB';
     const duration = buckets.at(-1)!.to_unix_ms - buckets[0].from_unix_ms;
-    const axisDate = new Intl.DateTimeFormat(localeTag, {
-      timeZone: timezone,
-      ...(duration <= 2 * 86_400_000
-        ? { hour: '2-digit', minute: '2-digit' }
-        : duration <= 120 * 86_400_000
-          ? { day: '2-digit', month: 'short' }
-          : { month: 'short', year: '2-digit' }),
-    });
     const axisNumber = new Intl.NumberFormat(localeTag, { maximumFractionDigits: 1 });
     let ready = false;
     const fullFromSeconds = appliedRange.fromUnixMs / 1000;
@@ -104,7 +118,7 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
         return [min, max];
       } }, y: { auto: true } },
       axes: [
-        { stroke: '#8097a1', grid: { stroke: 'rgba(145, 171, 180, .13)', width: 1 }, ticks: { stroke: 'rgba(145, 171, 180, .22)' }, font: '11px Inter, system-ui', values: (_plot, splits) => splits.map((value) => axisDate.format(value * 1000)) },
+        { stroke: '#8097a1', grid: { stroke: 'rgba(145, 171, 180, .13)', width: 1 }, ticks: { stroke: 'rgba(145, 171, 180, .22)' }, font: '11px Inter, system-ui', values: (instance, splits) => formatTimeAxisValues(localeTag, timezone, duration, instance.scales.x.min, instance.scales.x.max, splits) },
         { stroke: '#8097a1', grid: { stroke: 'rgba(145, 171, 180, .13)', width: 1 }, ticks: { stroke: 'rgba(145, 171, 180, .22)' }, font: '11px Inter, system-ui', size: 50, values: (_plot, splits) => splits.map((value) => axisNumber.format(value)) },
       ],
       series: [{ label: t('receivedAt') }, ...lineSeries],
