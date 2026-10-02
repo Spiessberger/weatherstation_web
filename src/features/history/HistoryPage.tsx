@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n';
 import { calendarDate, calendarDaysInclusive, dateTimeSeconds, number, percent, rain, temperature, wind } from '../../format';
 import type { Coverage, HistorySummary, WeatherReading } from '../../api/types';
 import { useHistory } from './useHistory';
+import type { HistoryPeriod } from './period';
 
 function CoverageLabel({ coverage }: { coverage: Coverage }) {
   const { t } = useI18n();
@@ -137,11 +138,18 @@ export function HistoryPage() {
     clearZoom();
     void history.load(history.fromDate, history.throughDate);
   };
-  const choosePreset = (days: number | 'all' | 'today') => {
+  const choosePreset = (period: HistoryPeriod) => {
     setValidation(null);
     clearZoom();
-    history.preset(days);
+    history.preset(period);
   };
+  const navigatePeriod = (direction: -1 | 1) => {
+    setValidation(null);
+    clearZoom();
+    history.navigatePeriod(direction);
+  };
+  const previousLabel = history.period === 'day' ? 'previousDay' : history.period === 'week' ? 'previousWeek' : history.period === 'month' ? 'previousMonth' : history.period === 'year' ? 'previousYear' : 'previousPeriod';
+  const nextLabel = history.period === 'day' ? 'nextDay' : history.period === 'week' ? 'nextWeek' : history.period === 'month' ? 'nextMonth' : history.period === 'year' ? 'nextYear' : 'nextPeriod';
   return <div class="history-page">
     <header class="history-header">
       <div><p class="eyebrow"><Icon name="chart"/>{t('history')}</p><h1>{t('historyTitle')}</h1><p>{t('historyIntro')}</p></div>
@@ -154,7 +162,18 @@ export function HistoryPage() {
       <label>{t('fromDate')}<input type="date" value={history.fromDate} max={history.throughDate || undefined} onInput={(event) => { setValidation(null); history.setFromDate(event.currentTarget.value); }}/></label>
       <label>{t('throughDate')}<input type="date" value={history.throughDate} min={history.fromDate || undefined} onInput={(event) => { setValidation(null); history.setThroughDate(event.currentTarget.value); }}/></label>
       <button class="primary-button" type="submit" disabled={history.loading}>{t('showRange')}</button>
-      <div class="presets" aria-label={t('historyTitle')}><button type="button" onClick={() => choosePreset('today')}>{t('today')}</button><button type="button" onClick={() => choosePreset(7)}>{t('last7Days')}</button><button type="button" onClick={() => choosePreset(14)}>{t('last14Days')}</button><button type="button" onClick={() => choosePreset(history.fullHistoryFits ? 'all' : 366)}>{t(history.fullHistoryFits ? 'allData' : 'recent366Days')}</button></div>
+      <div class="presets" role="group" aria-label={t('historyTitle')}>
+        <button type="button" disabled={!history.dashboard} onClick={() => choosePreset('day')}>{t('today')}</button>
+        <button type="button" disabled={!history.dashboard} onClick={() => choosePreset('week')}>{t('currentWeek')}</button>
+        <button type="button" disabled={!history.dashboard} onClick={() => choosePreset('month')}>{t('currentMonth')}</button>
+        <button type="button" disabled={!history.dashboard} onClick={() => choosePreset('year')}>{t('currentYear')}</button>
+      </div>
+      <div class="period-navigation" role="group" aria-label={t('navigatePeriod')}>
+        <button class="secondary-button" type="button" disabled={!history.period || history.loading} onClick={() => navigatePeriod(-1)}><span aria-hidden="true">← </span>{t(previousLabel)}</button>
+        <span class="period-label" aria-live="polite">{history.fromDate && history.throughDate ? t('appliedRange', { from: calendarDate(history.fromDate, locale), through: calendarDate(history.throughDate, locale) }) : t('loading')}</span>
+        <button class="secondary-button" type="button" disabled={!history.period || history.loading} onClick={() => navigatePeriod(1)}>{t(nextLabel)}<span aria-hidden="true"> →</span></button>
+        {!history.period && <small>{t('choosePeriodHint')}</small>}
+      </div>
       {validation && <p class="form-error" role="alert">{t(validation === 'limit' ? 'rangeLimitError' : 'rangeError')}</p>}
     </form>
     {history.error && <div class="alert-banner error" role="alert"><Icon name="alert"/><span>{history.busy ? t('historyBusy') : history.tooLarge ? t('historyTooLarge') : history.invalid ? t('historyInvalid') : t('historyError')}</span>{!history.invalid && <button class="inline-action" type="button" onClick={() => void history.retry()}>{t('retry')}</button>}</div>}

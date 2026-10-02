@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from '@testing-library/preact';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
 import type { DashboardResponse, HistorySummary, WeatherReading } from '../../api/types';
 import { useHistory } from './useHistory';
+import { HistoryPage } from './HistoryPage';
+import { I18nProvider } from '../../i18n';
+
+vi.mock('../../components/TimeChart', () => ({ TimeChart: () => null }));
 
 const weather = (id: number, timestamp = id * 1000): WeatherReading => ({
   id, v: 1, type: 'weather', boot_id: 'a'.repeat(32), seq: id, station_id: 106,
@@ -39,9 +43,66 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+beforeEach(() => { vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-24T12:00:00Z')); });
 afterEach(() => vi.restoreAllMocks());
 
 describe('history request ownership', () => {
+  it.each([
+    ['week', '2026-12-28', '2027-01-03'],
+    ['month', '2027-01-01', '2027-01-31'],
+    ['year', '2027-01-01', '2027-12-31'],
+  ] as const)('selects the current station-local %s even with older retained readings', async (period, fromDate, throughDate) => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-12-31T23:30:00Z'));
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const summarySpy = vi.spyOn(api, 'historySummary').mockImplementation(async (selection) => {
+      if (selection.mode !== 'dates') throw new Error('Expected calendar dates');
+      return summary(selection.fromDate, selection.throughDate, 10_000);
+    });
+    vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [] });
+    const hook = renderHook(() => useHistory());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.fromDate).toBe('2026-12-28');
+    expect(hook.result.current.throughDate).toBe('2027-01-03');
+    act(() => { hook.result.current.preset(period); });
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate, throughDate }, expect.any(AbortSignal));
+    expect(hook.result.current.period).toBe(period);
+    hook.unmount();
+  });
+
+  it('navigates calendar periods through the page controls and disables stepping for custom dates', async () => {
+    localStorage.setItem('weatherstation.locale', 'en');
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const summarySpy = vi.spyOn(api, 'historySummary').mockImplementation(async (selection) => {
+      if (selection.mode !== 'dates') throw new Error('Expected calendar dates');
+      return { ...summary(selection.fromDate, selection.throughDate, 10_000), sample_count: 0 };
+    });
+    vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [] });
+    const page = render(<I18nProvider><HistoryPage/></I18nProvider>);
+    const previousWeek = await page.findByRole('button', { name: 'Previous week' });
+    await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(previousWeek);
+    await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-09-14', throughDate: '2026-09-20' }, expect.any(AbortSignal));
+    fireEvent.click(page.getByRole('button', { name: 'Next week' }));
+    await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-09-21', throughDate: '2026-09-27' }, expect.any(AbortSignal));
+
+    fireEvent.click(page.getByRole('button', { name: 'This month' }));
+    const previousMonth = await page.findByRole('button', { name: 'Previous month' });
+    await waitFor(() => expect((previousMonth as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(previousMonth);
+    await waitFor(() => expect((previousMonth as HTMLButtonElement).disabled).toBe(false));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-08-01', throughDate: '2026-08-31' }, expect.any(AbortSignal));
+    expect((page.getByLabelText('From') as HTMLInputElement).value).toBe('2026-08-01');
+
+    fireEvent.input(page.getByLabelText('From'), { target: { value: '2026-08-02' } });
+    expect((page.getByRole('button', { name: 'Previous period' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((page.getByRole('button', { name: 'Next period' }) as HTMLButtonElement).disabled).toBe(true);
+    page.unmount();
+    localStorage.removeItem('weatherstation.locale');
+  });
+
   it('uses the current Vienna date for today instead of the latest retained date', async () => {
     vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
     const summarySpy = vi.spyOn(api, 'historySummary').mockImplementation(async (selection) =>
@@ -51,7 +112,7 @@ describe('history request ownership', () => {
     const hook = renderHook(() => useHistory());
     await waitFor(() => expect(hook.result.current.rows).toHaveLength(1));
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-24T22:30:00Z'));
-    act(() => { hook.result.current.preset('today'); });
+    act(() => { hook.result.current.preset('day'); });
     await waitFor(() => expect(summarySpy).toHaveBeenLastCalledWith(
       { mode: 'dates', fromDate: '2026-10-25', throughDate: '2026-10-25' },
       expect.any(AbortSignal),
@@ -115,11 +176,11 @@ describe('history request ownership', () => {
 
     const hook = renderHook(() => useHistory());
     await waitFor(() => expect(hook.result.current.error?.message).toBe('summary unavailable'));
-    expect(hook.result.current.fromDate).toBe('2026-09-18');
-    expect(hook.result.current.throughDate).toBe('2026-09-24');
+    expect(hook.result.current.fromDate).toBe('2026-09-21');
+    expect(hook.result.current.throughDate).toBe('2026-09-27');
     await act(async () => { await hook.result.current.retry(); });
     expect(summarySpy).toHaveBeenLastCalledWith(
-      { mode: 'dates', fromDate: '2026-09-18', throughDate: '2026-09-24' },
+      { mode: 'dates', fromDate: '2026-09-21', throughDate: '2026-09-27' },
       expect.any(AbortSignal),
     );
     expect(hook.result.current.rows).toHaveLength(1);

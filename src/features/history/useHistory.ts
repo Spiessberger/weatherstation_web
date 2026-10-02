@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, ApiError } from '../../api/client';
 import type { DashboardResponse, HistorySummary, HistorySummarySelection, WeatherReading } from '../../api/types';
-import { addCalendarDays, calendarDaysInclusive, stationDate } from '../../format';
+import { stationDate } from '../../format';
+import { periodRange, type HistoryPeriod } from './period';
 
 interface RequestToken {
   generation: number;
@@ -14,6 +15,7 @@ export function useHistory() {
   const [rows, setRows] = useState<WeatherReading[]>([]);
   const [fromDate, setFromDate] = useState('');
   const [throughDate, setThroughDate] = useState('');
+  const [period, setPeriod] = useState<HistoryPeriod | null>('week');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -62,17 +64,23 @@ export function useHistory() {
     }
   }, []);
 
-  const load = useCallback((from: string, through: string) => run({
-    mode: 'dates',
-    fromDate: from,
-    throughDate: through,
-  }), [run]);
+  const load = useCallback((from: string, through: string) => {
+    setPeriod(null);
+    return run({
+      mode: 'dates',
+      fromDate: from,
+      throughDate: through,
+    });
+  }, [run]);
 
-  const loadExact = useCallback((fromUnixMs: number, toUnixMs: number) => run({
-    mode: 'instants',
-    fromUnixMs,
-    toUnixMs,
-  }), [run]);
+  const loadExact = useCallback((fromUnixMs: number, toUnixMs: number) => {
+    setPeriod(null);
+    return run({
+      mode: 'instants',
+      fromUnixMs,
+      toUnixMs,
+    });
+  }, [run]);
 
   const initialize = useCallback(async () => {
     const token = begin();
@@ -84,13 +92,11 @@ export function useHistory() {
       if (!current(token)) return;
       setDashboard(support);
       const timezone = support.station_timezone;
-      const extent = support.history.weather;
-      const through = stationDate(extent?.last_received_at_unix_ms ?? Date.now(), timezone);
-      const earliest = extent ? stationDate(extent.first_received_at_unix_ms, timezone) : addCalendarDays(through, -6);
-      const from = [addCalendarDays(through, -6), earliest].sort().at(-1)!;
-      setFromDate(from);
-      setThroughDate(through);
-      const selection: HistorySummarySelection = { mode: 'dates', fromDate: from, throughDate: through };
+      const range = periodRange(stationDate(Date.now(), timezone), 'week');
+      setPeriod('week');
+      setFromDate(range.fromDate);
+      setThroughDate(range.throughDate);
+      const selection: HistorySummarySelection = { mode: 'dates', ...range };
       lastRequest.current = selection;
       await fetchRange(selection, token);
     } catch (reason) {
@@ -134,36 +140,33 @@ export function useHistory() {
     }
   };
 
-  const preset = (days: number | 'all' | 'today') => {
+  const selectPeriod = (nextPeriod: HistoryPeriod, anchor: string, offset = 0) => {
+    const range = periodRange(anchor, nextPeriod, offset);
+    setPeriod(nextPeriod);
+    setFromDate(range.fromDate);
+    setThroughDate(range.throughDate);
+    void run({ mode: 'dates', ...range });
+  };
+
+  const preset = (nextPeriod: HistoryPeriod) => {
     const timezone = dashboard?.station_timezone ?? 'Europe/Vienna';
-    const extent = dashboard?.history.weather;
-    const through = days === 'today'
-      ? stationDate(Date.now(), timezone)
-      : stationDate(extent?.last_received_at_unix_ms ?? Date.now(), timezone);
-    const from = days === 'today'
-      ? through
-      : days === 'all' && extent
-        ? stationDate(extent.first_received_at_unix_ms, timezone)
-        : addCalendarDays(through, -(typeof days === 'number' ? days - 1 : 6));
-    setFromDate(from);
-    setThroughDate(through);
-    void load(from, through);
+    selectPeriod(nextPeriod, stationDate(Date.now(), timezone));
+  };
+
+  const navigatePeriod = (direction: -1 | 1) => {
+    if (period && fromDate && !loading) selectPeriod(period, fromDate, direction);
   };
 
   const retry = () => dashboard
     ? run(lastRequest.current ?? { mode: 'dates', fromDate, throughDate })
     : initialize();
-  const extent = dashboard?.history.weather;
-  const fullHistoryFits = !extent || calendarDaysInclusive(
-    stationDate(extent.first_received_at_unix_ms, dashboard.station_timezone),
-    stationDate(extent.last_received_at_unix_ms, dashboard.station_timezone),
-  ) <= 366;
-
   return {
-    dashboard, summary, rows, fromDate, throughDate, setFromDate, setThroughDate,
+    dashboard, summary, rows, fromDate, throughDate, period,
+    setFromDate: (value: string) => { setPeriod(null); setFromDate(value); },
+    setThroughDate: (value: string) => { setPeriod(null); setThroughDate(value); },
     loading, loadingMore, error, busy: error instanceof ApiError && error.status === 503,
     tooLarge: error instanceof ApiError && error.code === 'row_budget_exceeded',
     invalid: error instanceof ApiError && error.status === 422,
-    hasMore, fullHistoryFits, load, loadExact, loadMore, preset, retry,
+    hasMore, load, loadExact, loadMore, preset, navigatePeriod, retry,
   };
 }

@@ -77,6 +77,7 @@ The frontend tests cover locale and station-time formatting, live/retained selec
 - Rain readings contain a cumulative station counter. The backend calculates interval rainfall from valid same-station counter changes and reports incomplete coverage when boundaries, long gaps, resets, or source changes make the estimate uncertain.
 - Average wind is the arithmetic mean of available sustained-wind readings. Maximum sustained wind and maximum gust are separate.
 - History date inputs are inclusive station-local calendar dates. The backend converts them across daylight-saving boundaries and returns the exact UTC interval used by both charts and table.
+- History opens on the current Vienna calendar week (Monday–Sunday). Today, this week, this month, and this year select complete calendar periods; the navigation row moves one selected period backward or forward. Editing dates or applying a chart interval switches to a custom range; choose a preset to resume period navigation.
 - Dragging across a chart proposes its visible exact interval. Applying that interval updates every history statistic, chart, and table page with the same half-open millisecond range; resetting the chart view does not reload data.
 - Charts receive at most 600 buckets. The raw table loads deterministic 100-row pages on demand.
 
