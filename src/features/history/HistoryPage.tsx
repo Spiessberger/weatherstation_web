@@ -67,8 +67,8 @@ function Charts({ summary, proposal, resetVersion, applying, onZoom, onApplyZoom
   const shared = { buckets: summary.buckets, timezone, locale, appliedRange, resetVersion, applying, onZoom, onApplyZoom, onResetZoom };
   return <section class="charts-grid">
     <TimeChart {...shared} chartId="temperature" title={t('chartTemperature')} series={tempSeries} proposal={proposal?.chartId === 'temperature' ? proposal : null}/>
-    <TimeChart {...shared} chartId="humidity" title={t('chartHumidity')} series={humiditySeries} proposal={proposal?.chartId === 'humidity' ? proposal : null}/>
     <TimeChart {...shared} chartId="wind" title={t('chartWind')} series={windSeries} proposal={proposal?.chartId === 'wind' ? proposal : null}/>
+    <TimeChart {...shared} chartId="humidity" title={t('chartHumidity')} series={humiditySeries} proposal={proposal?.chartId === 'humidity' ? proposal : null}/>
     <TimeChart {...shared} chartId="rain" title={t('chartRain')} series={rainSeries} proposal={proposal?.chartId === 'rain' ? proposal : null} kind="bars"/>
   </section>;
 }
