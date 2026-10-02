@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { TimeChart, type ChartSeries, type ExactRange } from '../../components/TimeChart';
 import { Icon } from '../../components/Icons';
 import { useI18n } from '../../i18n';
-import { calendarDate, calendarDaysInclusive, dateTimeSeconds, number, percent, rain, temperature, wind } from '../../format';
+import { calendarDate, dateTimeSeconds, number, percent, rain, temperature, wind } from '../../format';
 import type { Coverage, HistorySummary, WeatherReading } from '../../api/types';
 import { RainChart } from './RainChart';
 import { useHistory } from './useHistory';
@@ -105,7 +105,7 @@ function HistoryLoading() {
 export function HistoryPage() {
   const { locale, t } = useI18n();
   const history = useHistory();
-  const [validation, setValidation] = useState<'order' | 'limit' | null>(null);
+  const [rangeInvalid, setRangeInvalid] = useState(false);
   const [zoomProposal, setZoomProposal] = useState<ZoomProposal | null>(null);
   const [zoomResetVersion, setZoomResetVersion] = useState(0);
   const clearZoom = useCallback(() => {
@@ -128,24 +128,20 @@ export function HistoryPage() {
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
     if (!history.fromDate || !history.throughDate || history.fromDate > history.throughDate) {
-      setValidation('order');
+      setRangeInvalid(true);
       return;
     }
-    if (calendarDaysInclusive(history.fromDate, history.throughDate) > 366) {
-      setValidation('limit');
-      return;
-    }
-    setValidation(null);
+    setRangeInvalid(false);
     clearZoom();
     void history.load(history.fromDate, history.throughDate);
   };
   const choosePreset = (period: HistoryPeriod) => {
-    setValidation(null);
+    setRangeInvalid(false);
     clearZoom();
     history.preset(period);
   };
   const navigatePeriod = (direction: -1 | 1) => {
-    setValidation(null);
+    setRangeInvalid(false);
     clearZoom();
     history.navigatePeriod(direction);
   };
@@ -160,8 +156,8 @@ export function HistoryPage() {
       })}</span><span class="observation-count">{t('observations', { count: number(history.summary.sample_count, locale, 0) })}</span></div>}
     </header>
     <form class="range-form" onSubmit={submit}>
-      <label>{t('fromDate')}<input type="date" value={history.fromDate} max={history.throughDate || undefined} onInput={(event) => { setValidation(null); history.setFromDate(event.currentTarget.value); }}/></label>
-      <label>{t('throughDate')}<input type="date" value={history.throughDate} min={history.fromDate || undefined} onInput={(event) => { setValidation(null); history.setThroughDate(event.currentTarget.value); }}/></label>
+      <label>{t('fromDate')}<input type="date" value={history.fromDate} max={history.throughDate || undefined} onInput={(event) => { setRangeInvalid(false); history.setFromDate(event.currentTarget.value); }}/></label>
+      <label>{t('throughDate')}<input type="date" value={history.throughDate} min={history.fromDate || undefined} onInput={(event) => { setRangeInvalid(false); history.setThroughDate(event.currentTarget.value); }}/></label>
       <button class="primary-button" type="submit" disabled={history.loading}>{t('showRange')}</button>
       <div class="presets" role="group" aria-label={t('historyTitle')}>
         <button type="button" disabled={!history.dashboard} onClick={() => choosePreset('day')}>{t('today')}</button>
@@ -175,7 +171,7 @@ export function HistoryPage() {
         <button class="secondary-button" type="button" disabled={!history.period || history.loading} onClick={() => navigatePeriod(1)}>{t(nextLabel)}<span aria-hidden="true"> →</span></button>
         {!history.period && <small>{t('choosePeriodHint')}</small>}
       </div>
-      {validation && <p class="form-error" role="alert">{t(validation === 'limit' ? 'rangeLimitError' : 'rangeError')}</p>}
+      {rangeInvalid && <p class="form-error" role="alert">{t('rangeError')}</p>}
     </form>
     {history.error && <div class="alert-banner error" role="alert"><Icon name="alert"/><span>{history.busy ? t('historyBusy') : history.tooLarge ? t('historyTooLarge') : history.invalid ? t('historyInvalid') : t('historyError')}</span>{!history.invalid && <button class="inline-action" type="button" onClick={() => void history.retry()}>{t('retry')}</button>}</div>}
     {history.loading ? <HistoryLoading/> : history.summary && history.summary.sample_count > 0 ? <>

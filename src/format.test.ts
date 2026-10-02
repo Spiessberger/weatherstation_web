@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCalendarDays, calendarDate, calendarDaysInclusive, cardinalDirection, dateTimeSeconds, number, stationDate, temperature } from './format';
+import { addCalendarDays, calendarDate, cardinalDirection, dateTimeSeconds, number, stationDate, temperature } from './format';
 
 describe('weather formatting', () => {
   it('keeps unavailable values distinct from zero', () => {
@@ -25,9 +25,6 @@ describe('weather formatting', () => {
   it('does calendar date arithmetic without DST assumptions', () => {
     expect(addCalendarDays('2026-03-29', 1)).toBe('2026-03-30');
     expect(addCalendarDays('2026-10-25', -1)).toBe('2026-10-24');
-    expect(calendarDaysInclusive('2025-09-25', '2026-09-25')).toBe(366);
-    expect(calendarDaysInclusive('2025-09-24', '2026-09-25')).toBe(367);
-    expect(calendarDaysInclusive('2026-09-24', '2026-09-24')).toBe(1);
   });
 
   it('localizes east on the compass', () => {

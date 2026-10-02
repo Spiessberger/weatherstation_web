@@ -72,14 +72,6 @@ export function addCalendarDays(date: string, days: number): string {
   return shifted.toISOString().slice(0, 10);
 }
 
-export function calendarDaysInclusive(from: string, through: string): number {
-  const parse = (value: string) => {
-    const [year, month, day] = value.split('-').map(Number);
-    return Date.UTC(year, month - 1, day);
-  };
-  return Math.floor((parse(through) - parse(from)) / 86_400_000) + 1;
-}
-
 export function relativeAge(timestamp: number, now: number, locale: Locale): string {
   const seconds = Math.max(0, Math.round((now - timestamp) / 1000));
   const formatter = new Intl.RelativeTimeFormat(localeTag(locale), { numeric: 'auto' });
