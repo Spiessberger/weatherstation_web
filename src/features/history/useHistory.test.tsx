@@ -6,6 +6,7 @@ import type { DashboardResponse, HistorySummary, WeatherReading } from '../../ap
 import { useHistory } from './useHistory';
 import { HistoryPage } from './HistoryPage';
 import { I18nProvider } from '../../i18n';
+import { UnitsProvider } from '../../units';
 
 vi.mock('../../components/TimeChart', () => ({ TimeChart: () => null }));
 
@@ -55,7 +56,7 @@ describe('history request ownership', () => {
       return summary(selection.fromDate, selection.throughDate, 10_000);
     });
     const readingsSpy = vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [weather(1, 10_100)] });
-    const page = render(<I18nProvider><HistoryPage/></I18nProvider>);
+    const page = render(<I18nProvider><UnitsProvider><HistoryPage/></UnitsProvider></I18nProvider>);
     await page.findByRole('table');
     expect(page.getByRole('region', { name: 'Summary' })).toBeTruthy();
     expect(page.container.querySelector('.applied-summary')).not.toBeNull();
@@ -112,7 +113,7 @@ describe('history request ownership', () => {
       return { ...summary(selection.fromDate, selection.throughDate, 10_000), sample_count: 0 };
     });
     vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [] });
-    const page = render(<I18nProvider><HistoryPage/></I18nProvider>);
+    const page = render(<I18nProvider><UnitsProvider><HistoryPage/></UnitsProvider></I18nProvider>);
     const previousWeek = await page.findByRole('button', { name: 'Previous week' });
     await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(previousWeek);

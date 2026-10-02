@@ -9,6 +9,7 @@ const de = {
   overview: 'Übersicht',
   history: 'Verlauf',
   switchLanguage: 'Sprache wechseln',
+  switchWindUnit: 'Einheit für Windgeschwindigkeit',
   german: 'Deutsch',
   english: 'English',
   skipContent: 'Zum Inhalt springen',
@@ -145,7 +146,7 @@ const de = {
 
 const en: Record<keyof typeof de, string> = {
   appName: 'Weather station', appTagline: 'Weather at home', overview: 'Overview', history: 'History',
-  switchLanguage: 'Change language', german: 'Deutsch', english: 'English', skipContent: 'Skip to content',
+  switchLanguage: 'Change language', switchWindUnit: 'Wind speed unit', german: 'Deutsch', english: 'English', skipContent: 'Skip to content',
   live: 'Live', stale: 'Stale', retained: 'Stored reading', offline: 'Gateway offline', updated: 'Updated {age}',
   exactTime: 'Received: {time}', currentWeather: 'Weather outside', noWeather: 'No weather data yet',
   noWeatherDetail: 'It will appear here as soon as the station sends a reading.', temperature: 'Temperature',

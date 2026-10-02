@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { Icon } from './Icons';
 import { useI18n } from '../i18n';
+import { useUnits } from '../units';
 
 export type Route = 'dashboard' | 'history';
 
@@ -10,6 +11,7 @@ export function AppShell({ route, onNavigate, children }: {
   children: ComponentChildren;
 }) {
   const { locale, setLocale, t } = useI18n();
+  const { windUnit, setWindUnit } = useUnits();
   const navigate = (next: Route, event: MouseEvent) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -27,9 +29,15 @@ export function AppShell({ route, onNavigate, children }: {
           <a href="/" class={route === 'dashboard' ? 'active' : ''} aria-current={route === 'dashboard' ? 'page' : undefined} onClick={(event) => navigate('dashboard', event)}><Icon name="home"/>{t('overview')}</a>
           <a href="/history-view" class={route === 'history' ? 'active' : ''} aria-current={route === 'history' ? 'page' : undefined} onClick={(event) => navigate('history', event)}><Icon name="chart"/>{t('history')}</a>
         </nav>
-        <div class="locale-switch" role="group" aria-label={t('switchLanguage')}>
-          <button type="button" class={locale === 'de' ? 'active' : ''} aria-pressed={locale === 'de'} onClick={() => setLocale('de')}>DE</button>
-          <button type="button" class={locale === 'en' ? 'active' : ''} aria-pressed={locale === 'en'} onClick={() => setLocale('en')}>EN</button>
+        <div class="header-preferences">
+          <div class="locale-switch" role="group" aria-label={t('switchWindUnit')}>
+            <button type="button" class={windUnit === 'mps' ? 'active' : ''} aria-pressed={windUnit === 'mps'} onClick={() => setWindUnit('mps')}>m/s</button>
+            <button type="button" class={windUnit === 'kmh' ? 'active' : ''} aria-pressed={windUnit === 'kmh'} onClick={() => setWindUnit('kmh')}>km/h</button>
+          </div>
+          <div class="locale-switch" role="group" aria-label={t('switchLanguage')}>
+            <button type="button" class={locale === 'de' ? 'active' : ''} aria-pressed={locale === 'de'} onClick={() => setLocale('de')}>DE</button>
+            <button type="button" class={locale === 'en' ? 'active' : ''} aria-pressed={locale === 'en'} onClick={() => setLocale('en')}>EN</button>
+          </div>
         </div>
       </div>
     </header>

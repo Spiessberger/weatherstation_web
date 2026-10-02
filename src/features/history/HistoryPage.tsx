@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { TimeChart, type ChartSeries, type ExactRange } from '../../components/TimeChart';
 import { Icon } from '../../components/Icons';
 import { useI18n } from '../../i18n';
-import { calendarDate, dateTimeSeconds, number, percent, rain, temperature, wind } from '../../format';
+import { calendarDate, dateTimeSeconds, number, percent, rain, temperature, wind, windInUnit, windSpeed } from '../../format';
 import type { Coverage, HistorySummary, WeatherReading } from '../../api/types';
 import { RainChart } from './RainChart';
 import { useHistory } from './useHistory';
 import type { HistoryPeriod } from './period';
+import { useUnits } from '../../units';
 
 function CoverageLabel({ coverage }: { coverage: Coverage }) {
   const { t } = useI18n();
@@ -19,14 +20,15 @@ function StatCard({ label, value, icon, detail }: { label: string; value: string
 
 function SummaryCards({ summary }: { summary: HistorySummary }) {
   const { locale, t } = useI18n();
+  const { windUnit } = useUnits();
   const stats = summary.statistics;
   return <section class="history-stats" aria-label={t('rangeSummary')}>
     <StatCard icon="thermometer" label={t('minTemperature')} value={temperature(stats.temperature_celsius.min, locale)}/>
     <StatCard icon="thermometer" label={t('maxTemperature')} value={temperature(stats.temperature_celsius.max, locale)}/>
     <StatCard icon="droplet" label={t('totalRain')} value={rain(stats.rain.total_mm, locale)} detail={<CoverageLabel coverage={stats.rain.coverage}/>}/>
-    <StatCard icon="wind" label={t('windAverage')} value={wind(stats.wind_speed_mps.average, locale)}/>
-    <StatCard icon="wind" label={t('windMaximum')} value={wind(stats.wind_speed_mps.max, locale)}/>
-    <StatCard icon="wind" label={t('maxGust')} value={wind(stats.gust_speed_mps.max, locale)}/>
+    <StatCard icon="wind" label={t('windAverage')} value={wind(stats.wind_speed_mps.average, locale, windUnit)}/>
+    <StatCard icon="wind" label={t('windMaximum')} value={wind(stats.wind_speed_mps.max, locale, windUnit)}/>
+    <StatCard icon="wind" label={t('maxGust')} value={wind(stats.gust_speed_mps.max, locale, windUnit)}/>
   </section>;
 }
 
@@ -45,6 +47,7 @@ function Charts({ history, summary, proposal, resetVersion, applying, onZoom, on
   onResetZoom: () => void;
 }) {
   const { locale, t } = useI18n();
+  const { windUnit } = useUnits();
   const timezone = summary.range.timezone;
   const tempSeries = useMemo<ChartSeries[]>(() => [
     { label: t('average'), color: '#f4bf6a', value: (b) => b.temperature_celsius.average, format: (v) => temperature(v, locale), width: 2.5 },
@@ -54,11 +57,14 @@ function Charts({ history, summary, proposal, resetVersion, applying, onZoom, on
   const humiditySeries = useMemo<ChartSeries[]>(() => [
     { label: t('average'), color: '#66c8bc', value: (b) => b.relative_humidity_percent.average, format: (v) => percent(v, locale), fill: 'rgba(102,200,188,.08)' },
   ], [locale, t]);
-  const windSeries = useMemo<ChartSeries[]>(() => [
-    { label: t('average'), color: '#73b9e6', value: (b) => b.wind_speed_mps.average, format: (v) => wind(v, locale), width: 2.5 },
-    { label: t('maximum'), color: '#ae88e8', value: (b) => b.wind_speed_mps.max, format: (v) => wind(v, locale), width: 1.5 },
-    { label: t('gust'), color: '#ed8069', value: (b) => b.gust_speed_mps.max, format: (v) => wind(v, locale), width: 1.5 },
-  ], [locale, t]);
+  const windSeries = useMemo<ChartSeries[]>(() => {
+    const format = (v: number | null) => windInUnit(v, locale, windUnit);
+    return [
+      { label: t('average'), color: '#73b9e6', value: (b) => windSpeed(b.wind_speed_mps.average, windUnit), format, width: 2.5 },
+      { label: t('maximum'), color: '#ae88e8', value: (b) => windSpeed(b.wind_speed_mps.max, windUnit), format, width: 1.5 },
+      { label: t('gust'), color: '#ed8069', value: (b) => windSpeed(b.gust_speed_mps.max, windUnit), format, width: 1.5 },
+    ];
+  }, [locale, t, windUnit]);
   const appliedRange = useMemo<ExactRange>(() => ({
     fromUnixMs: summary.range.from_unix_ms,
     toUnixMs: summary.range.to_unix_ms,
@@ -78,6 +84,7 @@ function ReadingsTable({ rows, timezone, hasMore, loadingMore, onLoadMore }: {
   rows: WeatherReading[]; timezone: string; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void;
 }) {
   const { locale, t } = useI18n();
+  const { windUnit } = useUnits();
   return <section class="readings-section" aria-labelledby="raw-title">
     <div class="section-heading"><div><p class="eyebrow">{t('details')}</p><h2 id="raw-title">{t('rawReadings')}</h2><p>{t('rawReadingsIntro')}</p></div><span>{t('rowsShown', { count: rows.length })}</span></div>
     <p class="sr-only" id="table-scroll-hint">{t('tableScrollHint')}</p>
@@ -87,7 +94,7 @@ function ReadingsTable({ rows, timezone, hasMore, loadingMore, onLoadMore }: {
         <tbody>{rows.map((row) => <tr key={row.id}>
           <td><time dateTime={new Date(row.received_at_unix_ms).toISOString()}>{dateTimeSeconds(row.received_at_unix_ms, locale, timezone)}</time></td>
           <td>{temperature(row.temperature_celsius, locale)}</td><td>{percent(row.relative_humidity_percent, locale)}</td>
-          <td>{wind(row.wind_speed_mps, locale)}</td><td>{wind(row.gust_speed_mps, locale)}</td>
+          <td>{wind(row.wind_speed_mps, locale, windUnit)}</td><td>{wind(row.gust_speed_mps, locale, windUnit)}</td>
           <td>{row.wind_direction_degrees == null ? '–' : `${number(row.wind_direction_degrees, locale, 0)}°`}</td>
           <td>{rain(row.rain_mm, locale)}</td><td>{number(row.uv_index, locale, 0)}</td>
           <td>{row.light_lux == null ? '–' : `${number(row.light_lux, locale, 0)} lx`}</td><td>{number(row.rssi_dbm, locale, 0)} dBm</td><td>{row.id}</td>

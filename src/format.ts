@@ -1,4 +1,5 @@
 export type Locale = 'de' | 'en';
+export type WindUnit = 'mps' | 'kmh';
 
 const localeTag = (locale: Locale) => (locale === 'de' ? 'de-AT' : 'en-GB');
 
@@ -14,8 +15,15 @@ export const temperature = (value: number | null | undefined, locale: Locale) =>
   value == null ? '–' : `${number(value, locale)} °C`;
 export const percent = (value: number | null | undefined, locale: Locale) =>
   value == null ? '–' : `${number(value, locale, 0)} %`;
-export const wind = (value: number | null | undefined, locale: Locale) =>
-  value == null ? '–' : `${number(value, locale)} m/s`;
+export const windUnitLabel = (unit: WindUnit) => (unit === 'kmh' ? 'km/h' : 'm/s');
+export const windSpeed = (mps: number | null | undefined, unit: WindUnit) =>
+  mps == null ? null : unit === 'kmh' ? mps * 3.6 : mps;
+/** Formats a speed already expressed in `unit`. */
+export const windInUnit = (value: number | null | undefined, locale: Locale, unit: WindUnit) =>
+  value == null ? '–' : `${number(value, locale)} ${windUnitLabel(unit)}`;
+/** Formats a station speed reported in m/s, converted to `unit`. */
+export const wind = (mps: number | null | undefined, locale: Locale, unit: WindUnit) =>
+  windInUnit(windSpeed(mps, unit), locale, unit);
 export const rain = (value: number | null | undefined, locale: Locale) =>
   value == null ? '–' : `${number(value, locale)} mm`;
 export const lux = (value: number | null | undefined, locale: Locale) =>

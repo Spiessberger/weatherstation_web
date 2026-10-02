@@ -6,6 +6,7 @@ import { cardinalDirection, dateTime, lux, number, percent, rain, relativeAge, t
 import { selectCurrent, type SelectedReading } from '../../model';
 import type { DashboardResponse, IndoorReading, LiveResponse, WeatherReading } from '../../api/types';
 import { useDashboard } from './useDashboard';
+import { useUnits } from '../../units';
 
 function StatusPill({ source, stale, gateway }: { source: 'live' | 'retained'; stale: boolean; gateway: boolean }) {
   const { t } = useI18n();
@@ -36,6 +37,7 @@ function WeatherHero({ current, live, timezone, now }: {
   now: number;
 }) {
   const { locale, t } = useI18n();
+  const { windUnit } = useUnits();
   const weather = current.reading;
   const direction = cardinalDirection(weather.wind_direction_degrees, locale);
   return <section class="weather-hero" aria-labelledby="current-weather-title">
@@ -52,7 +54,7 @@ function WeatherHero({ current, live, timezone, now }: {
     </p>
     <div class="hero-metrics">
       <Metric icon="humidity" label={t('humidity')} value={percent(weather.relative_humidity_percent, locale)} />
-      <Metric icon="wind" label={t('wind')} value={wind(weather.wind_speed_mps, locale)} detail={`${t('gust')} ${wind(weather.gust_speed_mps, locale)}`} />
+      <Metric icon="wind" label={t('wind')} value={wind(weather.wind_speed_mps, locale, windUnit)} detail={`${t('gust')} ${wind(weather.gust_speed_mps, locale, windUnit)}`} />
       <Metric icon="compass" label={t('direction')} value={weather.wind_direction_degrees == null ? '–' : `${direction} · ${number(weather.wind_direction_degrees, locale, 0)}°`} />
       <Metric icon="sun" label={t('uvIndex')} value={number(weather.uv_index, locale, 0)} detail={lux(weather.light_lux, locale)} />
     </div>

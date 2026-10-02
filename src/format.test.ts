@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCalendarDays, calendarDate, cardinalDirection, dateTimeSeconds, number, stationDate, temperature } from './format';
+import { addCalendarDays, calendarDate, cardinalDirection, dateTimeSeconds, number, stationDate, temperature, wind, windInUnit } from './format';
 
 describe('weather formatting', () => {
   it('keeps unavailable values distinct from zero', () => {
@@ -30,5 +30,13 @@ describe('weather formatting', () => {
   it('localizes east on the compass', () => {
     expect(cardinalDirection(90, 'de')).toBe('O');
     expect(cardinalDirection(90, 'en')).toBe('E');
+  });
+
+  it('formats station wind speeds in the chosen unit', () => {
+    expect(wind(5, 'de', 'mps')).toBe('5,0 m/s');
+    expect(wind(5, 'de', 'kmh')).toBe('18,0 km/h');
+    expect(wind(0, 'en', 'kmh')).toBe('0.0 km/h');
+    expect(wind(null, 'en', 'kmh')).toBe('–');
+    expect(windInUnit(18, 'en', 'kmh')).toBe('18.0 km/h');
   });
 });
