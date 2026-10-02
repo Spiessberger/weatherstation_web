@@ -34,7 +34,7 @@ const summary = (from: string, through: string, marker: number): HistorySummary 
     rain: { total_mm: 0, coverage: 'complete', excluded_transitions: 0, largest_gap_ms: 1000 },
     wind_speed_mps: { average: 1, max: 2 }, gust_speed_mps: { max: 3 },
   },
-  buckets: [],
+  buckets: [], rain_grouping: 'hour', available_rain_groupings: ['hour', 'day', 'week', 'month'], rain_buckets: [],
 });
 
 function deferred<T>() {
@@ -75,7 +75,7 @@ describe('history request ownership', () => {
     expect(page.queryByRole('alert')).toBeNull();
     expect(summarySpy).toHaveBeenLastCalledWith(
       { mode: 'dates', fromDate: '2026-09-28', throughDate: '2026-10-04' },
-      expect.any(AbortSignal),
+      expect.any(AbortSignal), 'auto',
     );
     page.unmount();
     localStorage.removeItem('weatherstation.locale');
@@ -99,7 +99,7 @@ describe('history request ownership', () => {
     expect(hook.result.current.throughDate).toBe('2027-01-03');
     act(() => { hook.result.current.preset(period); });
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
-    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate, throughDate }, expect.any(AbortSignal));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate, throughDate }, expect.any(AbortSignal), 'auto');
     expect(hook.result.current.period).toBe(period);
     hook.unmount();
   });
@@ -117,17 +117,17 @@ describe('history request ownership', () => {
     await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(previousWeek);
     await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
-    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-09-14', throughDate: '2026-09-20' }, expect.any(AbortSignal));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-09-14', throughDate: '2026-09-20' }, expect.any(AbortSignal), 'auto');
     fireEvent.click(page.getByRole('button', { name: 'Next week' }));
     await waitFor(() => expect((previousWeek as HTMLButtonElement).disabled).toBe(false));
-    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-09-21', throughDate: '2026-09-27' }, expect.any(AbortSignal));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-09-21', throughDate: '2026-09-27' }, expect.any(AbortSignal), 'auto');
 
     fireEvent.click(page.getByRole('button', { name: 'This month' }));
     const previousMonth = await page.findByRole('button', { name: 'Previous month' });
     await waitFor(() => expect((previousMonth as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(previousMonth);
     await waitFor(() => expect((previousMonth as HTMLButtonElement).disabled).toBe(false));
-    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-08-01', throughDate: '2026-08-31' }, expect.any(AbortSignal));
+    expect(summarySpy).toHaveBeenLastCalledWith({ mode: 'dates', fromDate: '2026-08-01', throughDate: '2026-08-31' }, expect.any(AbortSignal), 'auto');
     expect((page.getByLabelText('From') as HTMLInputElement).value).toBe('2026-08-01');
 
     fireEvent.input(page.getByLabelText('From'), { target: { value: '2026-08-02' } });
@@ -149,7 +149,7 @@ describe('history request ownership', () => {
     act(() => { hook.result.current.preset('day'); });
     await waitFor(() => expect(summarySpy).toHaveBeenLastCalledWith(
       { mode: 'dates', fromDate: '2026-10-25', throughDate: '2026-10-25' },
-      expect.any(AbortSignal),
+      expect.any(AbortSignal), 'auto',
     ));
     expect(hook.result.current.fromDate).toBe('2026-10-25');
     expect(hook.result.current.throughDate).toBe('2026-10-25');
@@ -215,7 +215,7 @@ describe('history request ownership', () => {
     await act(async () => { await hook.result.current.retry(); });
     expect(summarySpy).toHaveBeenLastCalledWith(
       { mode: 'dates', fromDate: '2026-09-21', throughDate: '2026-09-27' },
-      expect.any(AbortSignal),
+      expect.any(AbortSignal), 'auto',
     );
     expect(hook.result.current.rows).toHaveLength(1);
     hook.unmount();
@@ -241,7 +241,7 @@ describe('history request ownership', () => {
     await act(async () => { await hook.result.current.retry(); });
     expect(summarySpy).toHaveBeenLastCalledWith(
       { mode: 'instants', fromUnixMs: 10_250, toUnixMs: 10_750 },
-      expect.any(AbortSignal),
+      expect.any(AbortSignal), 'auto',
     );
     expect(hook.result.current.summary?.range.mode).toBe('instants');
     hook.unmount();
@@ -276,4 +276,92 @@ describe('history request ownership', () => {
     });
     hook.unmount();
   });
+  it('changes only rainfall, preserving the period, table, and detailed chart buckets', async () => {
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const initial = summary('2026-09-21', '2026-09-27', 10_000);
+    const changed = { ...initial, rain_grouping: 'week' as const };
+    const summarySpy = vi.spyOn(api, 'historySummary').mockResolvedValueOnce(initial).mockResolvedValue(changed);
+    const rowsSpy = vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [weather(1)] });
+    const hook = renderHook(() => useHistory());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    const rows = hook.result.current.rows;
+    await act(async () => { await hook.result.current.changeRainGrouping('week'); });
+    expect(summarySpy).toHaveBeenLastCalledWith(
+      { mode: 'instants', fromUnixMs: 10_000, toUnixMs: 11_000 }, expect.any(AbortSignal), 'week',
+    );
+    expect(rowsSpy).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.rows).toBe(rows);
+    expect(hook.result.current.summary?.buckets).toBe(initial.buckets);
+    expect(hook.result.current.summary?.rain_grouping).toBe('week');
+    expect(hook.result.current.period).toBe('week');
+    act(() => { hook.result.current.navigatePeriod(-1); });
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(summarySpy).toHaveBeenLastCalledWith(
+      { mode: 'dates', fromDate: '2026-09-14', throughDate: '2026-09-20' }, expect.any(AbortSignal), 'week',
+    );
+    expect(hook.result.current.rainGrouping).toBe('week');
+    hook.unmount();
+  });
+
+  it('discards a late grouping response after the selected date range changes', async () => {
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const pending = deferred<HistorySummary>();
+    const summarySpy = vi.spyOn(api, 'historySummary')
+      .mockResolvedValueOnce(summary('2026-09-21', '2026-09-27', 10_000))
+      .mockImplementationOnce(() => pending.promise)
+      .mockResolvedValueOnce({ ...summary('2026-09-28', '2026-10-04', 20_000), rain_grouping: 'month' });
+    vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [weather(1)] });
+    const hook = renderHook(() => useHistory());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    act(() => { void hook.result.current.changeRainGrouping('month'); });
+    const signal = summarySpy.mock.calls[1][1];
+    await act(async () => { await hook.result.current.load('2026-09-28', '2026-10-04'); });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => { pending.resolve(summary('2026-09-21', '2026-09-27', 10_000)); });
+    expect(hook.result.current.summary?.range.from_unix_ms).toBe(20_000);
+    expect(hook.result.current.summary?.rain_grouping).toBe('month');
+    expect(hook.result.current.rainLoading).toBe(false);
+    hook.unmount();
+  });
+
+  it('retains the visible graph on a grouping failure and retries the selected grouping', async () => {
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const initial = summary('2026-09-21', '2026-09-27', 10_000);
+    vi.spyOn(api, 'historySummary').mockResolvedValueOnce(initial)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ ...initial, rain_grouping: 'day' });
+    vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [weather(1)] });
+    const hook = renderHook(() => useHistory());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => { await hook.result.current.changeRainGrouping('day'); });
+    expect(hook.result.current.summary).toBe(initial);
+    expect(hook.result.current.error).toBeNull();
+    expect(hook.result.current.rainError?.message).toBe('offline');
+    await act(async () => { await hook.result.current.changeRainGrouping(hook.result.current.rainGrouping); });
+    expect(hook.result.current.summary?.rain_grouping).toBe('day');
+    expect(hook.result.current.rainError).toBeNull();
+    hook.unmount();
+  });
+
+  it('remembers hourly grouping through a range that requires an automatic fallback', async () => {
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const initial = summary('2026-09-21', '2026-09-27', 10_000);
+    const summarySpy = vi.spyOn(api, 'historySummary').mockResolvedValueOnce(initial).mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce({ ...summary('2026-01-01', '2026-12-31', 20_000), rain_grouping: 'month', available_rain_groupings: ['day', 'week', 'month'] })
+      .mockResolvedValueOnce(initial);
+    vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [] });
+    const hook = renderHook(() => useHistory());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    await act(async () => { await hook.result.current.changeRainGrouping('hour'); });
+    act(() => { hook.result.current.preset('year'); });
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.rainGrouping).toBe('hour');
+    expect(hook.result.current.summary?.rain_grouping).toBe('month');
+    act(() => { hook.result.current.preset('week'); });
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(summarySpy.mock.calls.at(-1)?.[2]).toBe('hour');
+    expect(hook.result.current.summary?.rain_grouping).toBe('hour');
+    hook.unmount();
+  });
+
 });

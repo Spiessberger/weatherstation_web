@@ -100,3 +100,16 @@ button,input { font: inherit; } button,a { -webkit-tap-highlight-color: transpar
   .header-inner{width:calc(100% - 16px)}.main-nav{gap:2px;padding:3px}.main-nav a{gap:5px;padding:8px 7px}.main-nav a svg{display:none}.locale-switch button{min-width:29px;min-height:30px;font-size:.65rem}.page-shell{width:calc(100% - 20px)}.hero-heading{display:block}.hero-heading .status-pill{margin-top:17px}.hero-heading h1{font-size:4.4rem}.hero-metrics{grid-template-columns:1fr}.metric{min-height:70px}.weather-hero.empty-state{flex-direction:column;text-align:center}.empty-illustration{flex-basis:100px;width:100px}.range-form{grid-template-columns:1fr;padding:14px}.primary-button,.presets{grid-column:1}.presets{width:100%}.presets button{flex:1}.history-stats{grid-template-columns:1fr 1fr}.history-stat{min-width:0;padding:14px}.chart-card{padding-inline:10px}.chart-inspector{align-items:flex-start;flex-direction:column}.zoom-action{grid-template-columns:1fr}.zoom-action>div{display:block}.zoom-action small,.zoom-action strong{display:block}.zoom-action small{margin-bottom:3px}.zoom-action>span{display:flex}.zoom-action button{flex:1;min-height:40px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+.rain-controls { display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:12px 0;color:var(--muted);font-size:.7rem; }
+.rain-controls label { display:flex;align-items:center;gap:8px; }
+.rain-controls select { min-height:36px;max-width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:8px;color:var(--text);background:var(--surface);font:inherit; }
+.rain-controls select:focus-visible { outline:2px solid var(--teal);outline-offset:2px; }
+.rain-controls select:disabled { opacity:.6; }
+.rain-hint,.rain-error { flex-basis:100%;margin:0;line-height:1.5; }
+.rain-error { color:var(--sun); }
+.rain-coverage-legend { display:flex;flex-wrap:wrap;gap:12px;flex-basis:100%;font-size:.65rem; }
+.rain-coverage-legend span { display:flex;align-items:center;gap:6px; }
+.rain-coverage-legend i { display:inline-block;width:10px;height:6px; }
+.rain-partial { background:#f4bf6a; }
+.rain-missing { border:1px solid #8097a1; }

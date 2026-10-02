@@ -1,14 +1,15 @@
 import uPlot, { type AlignedData, type Options, type Series } from 'uplot';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { HistoryBucket } from '../api/types';
+import type { ComponentChildren } from 'preact';
+import type { HistoryBucket, TimeBucket } from '../api/types';
 import type { Locale } from '../format';
 import { dateTime, dateTimeSeconds } from '../format';
 import { useI18n } from '../i18n';
 
-export interface ChartSeries {
+export interface ChartSeries<Bucket extends TimeBucket = HistoryBucket> {
   label: string;
   color: string;
-  value: (bucket: HistoryBucket) => number | null;
+  value: (bucket: Bucket) => number | null;
   format: (value: number | null) => string;
   fill?: string;
   width?: number;
@@ -54,12 +55,12 @@ export function formatTimeAxisValues(
   return splits.map((value) => formatter.format(value * 1000));
 }
 
-export function TimeChart({ chartId, title, buckets, series, timezone, locale, appliedRange, proposal,
-  resetVersion, applying, onZoom, onApplyZoom, onResetZoom, kind = 'line' }: {
+export function TimeChart<Bucket extends TimeBucket = HistoryBucket>({ chartId, title, buckets, series, timezone, locale, appliedRange, proposal,
+  resetVersion, applying, onZoom, onApplyZoom, onResetZoom, kind = 'line', controls, renderInspector, barStatus }: {
   chartId: string;
   title: string;
-  buckets: HistoryBucket[];
-  series: ChartSeries[];
+  buckets: Bucket[];
+  series: ChartSeries<Bucket>[];
   timezone: string;
   locale: Locale;
   appliedRange: ExactRange;
@@ -70,6 +71,9 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
   onApplyZoom: () => void;
   onResetZoom: () => void;
   kind?: 'line' | 'bars';
+  controls?: ComponentChildren;
+  renderInspector?: (bucket: Bucket) => ComponentChildren;
+  barStatus?: (bucket: Bucket) => 'complete' | 'partial' | 'unavailable' | 'future';
 }) {
   const { t } = useI18n();
   const host = useRef<HTMLDivElement>(null);
@@ -93,7 +97,7 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
       width: item.width ?? 2,
       spanGaps: false,
       points: { show: false },
-      ...(kind === 'bars' ? { paths: uPlot.paths.bars?.({ size: [0.6, 100] }) } : {}),
+      ...(kind === 'bars' ? { paths: () => null } : {}),
     }));
     const localeTag = locale === 'de' ? 'de-AT' : 'en-GB';
     const duration = buckets.at(-1)!.to_unix_ms - buckets[0].from_unix_ms;
@@ -116,13 +120,47 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
           return [initialView.fromUnixMs / 1000, initialView.toUnixMs / 1000];
         }
         return [min, max];
-      } }, y: { auto: true } },
+      } }, y: { auto: true, ...(kind === 'bars' ? { range: (_plot: uPlot, _min: number, max: number) => [0, Math.max(1, (max ?? 0) * 1.1)] as [number, number] } : {}) } },
       axes: [
         { stroke: '#8097a1', grid: { stroke: 'rgba(145, 171, 180, .13)', width: 1 }, ticks: { stroke: 'rgba(145, 171, 180, .22)' }, font: '11px Inter, system-ui', values: (instance, splits) => formatTimeAxisValues(localeTag, timezone, duration, instance.scales.x.min, instance.scales.x.max, splits) },
         { stroke: '#8097a1', grid: { stroke: 'rgba(145, 171, 180, .13)', width: 1 }, ticks: { stroke: 'rgba(145, 171, 180, .22)' }, font: '11px Inter, system-ui', size: 50, values: (_plot, splits) => splits.map((value) => axisNumber.format(value)) },
       ],
       series: [{ label: t('receivedAt') }, ...lineSeries],
       hooks: {
+        // Draw bars from their actual bounds: months, DST days, and clipped periods
+        // have different widths. Missing values get a marker, never a zero value.
+        draw: kind === 'bars' ? [(instance) => {
+          const { ctx, bbox } = instance;
+          const pixel = window.devicePixelRatio || 1;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
+          ctx.clip();
+          const baseline = instance.valToPos(0, 'y', true);
+          for (const bucket of buckets) {
+            const status = barStatus?.(bucket) ?? 'complete';
+            if (status === 'future') continue;
+            const left = instance.valToPos(bucket.from_unix_ms / 1000, 'x', true);
+            const right = instance.valToPos(bucket.to_unix_ms / 1000, 'x', true);
+            const gap = Math.min((right - left) * 0.12, 8 * pixel);
+            const width = Math.max(0, right - left - gap);
+            for (const item of series) {
+              const value = item.value(bucket);
+              const missing = value == null;
+              const height = missing ? 6 * pixel : Math.max(2 * pixel, baseline - instance.valToPos(value, 'y', true));
+              ctx.fillStyle = missing ? '#8097a1' : status === 'partial' ? '#f4bf6a' : item.color;
+              ctx.globalAlpha = missing ? 0.4 : 0.75;
+              if (missing) {
+                ctx.strokeStyle = '#8097a1';
+                ctx.lineWidth = pixel;
+                ctx.strokeRect(left + gap / 2, baseline - height, width, height - pixel);
+              } else {
+                ctx.fillRect(left + gap / 2, baseline - height, width, height);
+              }
+            }
+          }
+          ctx.restore();
+        }] : [],
         ready: [() => { ready = true; }],
         setScale: [(instance, scaleKey) => {
           if (!ready || !userDragging || suppressScale.current || scaleKey !== 'x') return;
@@ -154,7 +192,7 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
       instance.destroy();
       plot.current = null;
     };
-  }, [aligned, appliedRange, buckets, chartId, kind, locale, onResetZoom, onZoom, series, t, timezone]);
+  }, [aligned, appliedRange, barStatus, buckets, chartId, kind, locale, onResetZoom, onZoom, series, t, timezone]);
 
   useEffect(() => {
     setSelected(null);
@@ -172,6 +210,7 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
   }, [appliedRange, resetVersion]);
 
   const select = (index: number) => {
+    if (buckets.length === 0) return;
     const bounded = Math.max(0, Math.min(buckets.length - 1, index));
     setSelected(bounded);
     const timestamp = (buckets[bounded].from_unix_ms + buckets[bounded].to_unix_ms) / 2000;
@@ -188,6 +227,7 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
 
   return <article class="chart-card">
     <div class="chart-title"><h3>{title}</h3><span>{t('chartZoomHelp')}</span></div>
+    {controls}
     <div class="chart-legend" aria-hidden="true">{series.map((item) => <span key={item.label}><i style={{ background: item.color }}/>{item.label}</span>)}</div>
     <div class="plot-focus" tabIndex={0} onKeyDown={onKeyDown} aria-label={`${title}. ${t('chartKeyboardHelp')}`}>
       <div ref={host} class="plot-host" aria-hidden="true" />
@@ -197,7 +237,7 @@ export function TimeChart({ chartId, title, buckets, series, timezone, locale, a
       <span><button type="button" onClick={onResetZoom} disabled={applying} aria-label={t('resetChartView')}>{t('resetZoomShort')}</button><button class="apply" type="button" onClick={onApplyZoom} disabled={applying} aria-label={t('applyVisiblePeriod')}>{applying ? t('loadingMore') : t('applyZoomShort')}</button></span>
     </div>}
     <div class="chart-inspector" aria-live="polite">
-      {bucket ? <>
+      {bucket ? renderInspector ? renderInspector(bucket) : <>
         <strong>{dateTime((bucket.from_unix_ms + bucket.to_unix_ms) / 2, locale, timezone)}</strong>
         {series.map((item) => <span key={item.label}><i style={{ background: item.color }}/>{item.label}: <b>{item.format(item.value(bucket))}</b></span>)}
       </> : <span>{t('chartKeyboardHelp')}</span>}

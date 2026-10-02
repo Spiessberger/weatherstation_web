@@ -68,7 +68,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 ```
 
-The frontend tests cover locale and station-time formatting, live/retained selection, initial history recovery, exact chart-range application, and cancellation between range and table requests. The Rust suite covers aggregate bounds, exact and calendar ranges, Vienna/DST boundaries, rainfall counter semantics, static delivery, and the existing live/raw APIs.
+The frontend tests cover locale and station-time formatting, live/retained selection, initial history recovery, exact chart-range application, rainfall grouping controls and labels, and cancellation between range, rainfall, and table requests. The Rust suite covers aggregate bounds, exact and calendar ranges, Vienna/DST boundaries, rainfall counter semantics, static delivery, and the existing live/raw APIs.
 
 ## Data and display semantics
 
@@ -79,7 +79,22 @@ The frontend tests cover locale and station-time formatting, live/retained selec
 - History date inputs are inclusive station-local calendar dates. The backend converts them across daylight-saving boundaries and returns the exact UTC interval used by both charts and table.
 - History opens on the current Vienna calendar week (Monday–Sunday). Today, this week, this month, and this year select complete calendar periods; the navigation row moves one selected period backward or forward. Editing dates or applying a chart interval switches to a custom range; choose a preset to resume period navigation.
 - Dragging across a chart proposes its visible exact interval. Applying that interval updates every history statistic, chart, and table page with the same half-open millisecond range; resetting the chart view does not reload data.
-- Charts receive at most 600 buckets. The raw table loads deterministic 100-row pages on demand.
+- Rainfall has its own **Group by** selector: Auto, Hourly, Daily, Weekly, and Monthly. Auto uses hourly buckets for up to two station-local dates, daily for up to six weeks, weekly for up to six calendar months, and monthly for longer ranges. Weeks start on Monday; days and months follow Vienna calendar boundaries, including daylight-saving changes.
+- A manual rainfall grouping stays selected during period navigation and applied zooms. If it would exceed 600 bars, the service uses Auto and the graph explains the fallback; the manual choice returns for shorter ranges. Changing grouping reloads only the rainfall view and preserves the raw-reading table.
+- Rainfall bars cover the intersection of each calendar period with the selected range. The inspector identifies partial periods and ongoing totals as “so far.” Gold indicates incomplete coverage, hollow grey markers mean unavailable rainfall, and a thin baseline mark represents a known zero. Future periods have no rainfall bar.
+- Charts receive at most 600 buckets per series. The raw table loads deterministic 100-row pages on demand.
+
+### Rainfall summary API
+
+`GET /api/v1/history/weather/summary` accepts `rain_grouping=auto|hour|day|week|month` alongside its existing date or exact-instant range and `max_points` parameters. The parameter defaults to `auto`. The response retains the detailed weather `buckets` and adds:
+
+- `rain_grouping`: the resolved grouping actually displayed.
+- `available_rain_groupings`: explicit groupings that fit the 600-bucket limit for this range.
+- `rain_buckets`: separate calendar buckets with exact clipped bounds, rainfall and coverage, `partial_period`, `ongoing`, `future`, and `observed_through_unix_ms`.
+
+Rainfall continues to use the service’s existing counter semantics: each valid change is assigned to the bucket containing the later reading; gaps, resets, and source changes retain their coverage information. Grouping does not redistribute counter changes across periods.
+
+Build and deploy the updated sibling `climate_data_service` together with this frontend; the rainfall view uses these additional API fields.
 
 ## Troubleshooting
 

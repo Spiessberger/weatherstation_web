@@ -4,6 +4,7 @@ import { Icon } from '../../components/Icons';
 import { useI18n } from '../../i18n';
 import { calendarDate, calendarDaysInclusive, dateTimeSeconds, number, percent, rain, temperature, wind } from '../../format';
 import type { Coverage, HistorySummary, WeatherReading } from '../../api/types';
+import { RainChart } from './RainChart';
 import { useHistory } from './useHistory';
 import type { HistoryPeriod } from './period';
 
@@ -33,7 +34,8 @@ interface ZoomProposal extends ExactRange {
   chartId: string;
 }
 
-function Charts({ summary, proposal, resetVersion, applying, onZoom, onApplyZoom, onResetZoom }: {
+function Charts({ history, summary, proposal, resetVersion, applying, onZoom, onApplyZoom, onResetZoom }: {
+  history: ReturnType<typeof useHistory>;
   summary: HistorySummary;
   proposal: ZoomProposal | null;
   resetVersion: number;
@@ -57,9 +59,6 @@ function Charts({ summary, proposal, resetVersion, applying, onZoom, onApplyZoom
     { label: t('maximum'), color: '#ae88e8', value: (b) => b.wind_speed_mps.max, format: (v) => wind(v, locale), width: 1.5 },
     { label: t('gust'), color: '#ed8069', value: (b) => b.gust_speed_mps.max, format: (v) => wind(v, locale), width: 1.5 },
   ], [locale, t]);
-  const rainSeries = useMemo<ChartSeries[]>(() => [
-    { label: t('totalRain'), color: '#4daec3', fill: 'rgba(77,174,195,.35)', value: (b) => b.rain.total_mm, format: (v) => rain(v, locale) },
-  ], [locale, t]);
   const appliedRange = useMemo<ExactRange>(() => ({
     fromUnixMs: summary.range.from_unix_ms,
     toUnixMs: summary.range.to_unix_ms,
@@ -69,7 +68,9 @@ function Charts({ summary, proposal, resetVersion, applying, onZoom, onApplyZoom
     <TimeChart {...shared} chartId="temperature" title={t('chartTemperature')} series={tempSeries} proposal={proposal?.chartId === 'temperature' ? proposal : null}/>
     <TimeChart {...shared} chartId="wind" title={t('chartWind')} series={windSeries} proposal={proposal?.chartId === 'wind' ? proposal : null}/>
     <TimeChart {...shared} chartId="humidity" title={t('chartHumidity')} series={humiditySeries} proposal={proposal?.chartId === 'humidity' ? proposal : null}/>
-    <TimeChart {...shared} chartId="rain" title={t('chartRain')} series={rainSeries} proposal={proposal?.chartId === 'rain' ? proposal : null} kind="bars"/>
+    <RainChart {...shared} summary={summary} grouping={history.rainGrouping} loading={history.rainLoading}
+      error={history.rainError} onGrouping={(grouping) => { onResetZoom(); void history.changeRainGrouping(grouping); }}
+      proposal={proposal?.chartId === 'rain' ? proposal : null}/>
   </section>;
 }
 
@@ -179,7 +180,7 @@ export function HistoryPage() {
     {history.error && <div class="alert-banner error" role="alert"><Icon name="alert"/><span>{history.busy ? t('historyBusy') : history.tooLarge ? t('historyTooLarge') : history.invalid ? t('historyInvalid') : t('historyError')}</span>{!history.invalid && <button class="inline-action" type="button" onClick={() => void history.retry()}>{t('retry')}</button>}</div>}
     {history.loading ? <HistoryLoading/> : history.summary && history.summary.sample_count > 0 ? <>
       <SummaryCards summary={history.summary}/>
-      <Charts summary={history.summary} proposal={zoomProposal} resetVersion={zoomResetVersion} applying={history.loading} onZoom={handleZoom} onApplyZoom={applyZoom} onResetZoom={clearZoom}/>
+      <Charts history={history} summary={history.summary} proposal={zoomProposal} resetVersion={zoomResetVersion} applying={history.loading} onZoom={handleZoom} onApplyZoom={applyZoom} onResetZoom={clearZoom}/>
       <ReadingsTable rows={history.rows} timezone={history.summary.range.timezone} hasMore={history.hasMore} loadingMore={history.loading || history.loadingMore} onLoadMore={() => void history.loadMore()}/>
     </> : !history.error && <section class="empty-history"><Icon name="chart" size={48}/><h2>{t('noHistory')}</h2><p>{t('noHistoryDetail')}</p></section>}
   </div>;

@@ -94,6 +94,22 @@ export interface NullableTriple {
   average: number | null;
 }
 
+export type RainGrouping = 'auto' | 'hour' | 'day' | 'week' | 'month';
+export type ResolvedRainGrouping = Exclude<RainGrouping, 'auto'>;
+
+export interface TimeBucket {
+  from_unix_ms: number;
+  to_unix_ms: number;
+}
+
+export interface RainBucket extends TimeBucket {
+  observed_through_unix_ms: number;
+  partial_period: boolean;
+  ongoing: boolean;
+  future: boolean;
+  rain: RainSummary;
+}
+
 export interface HistoryBucket {
   from_unix_ms: number;
   to_unix_ms: number;
@@ -122,6 +138,9 @@ export interface HistorySummary {
     gust_speed_mps: { max: number | null };
   };
   buckets: HistoryBucket[];
+  rain_grouping: ResolvedRainGrouping;
+  available_rain_groupings: ResolvedRainGrouping[];
+  rain_buckets: RainBucket[];
 }
 
 export type HistorySummarySelection =

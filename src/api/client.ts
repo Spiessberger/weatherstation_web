@@ -5,6 +5,7 @@ import type {
   HistorySummary,
   HistorySummarySelection,
   LiveResponse,
+  RainGrouping,
 } from './types';
 
 export class ApiError extends Error {
@@ -41,8 +42,8 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 export const api = {
   live: (signal?: AbortSignal) => getJson<LiveResponse>('/live', signal),
   dashboard: (signal?: AbortSignal) => getJson<DashboardResponse>('/api/v1/dashboard', signal),
-  historySummary: (selection: HistorySummarySelection, signal?: AbortSignal) => {
-    const query = new URLSearchParams({ max_points: '360' });
+  historySummary: (selection: HistorySummarySelection, signal?: AbortSignal, rainGrouping: RainGrouping = 'auto') => {
+    const query = new URLSearchParams({ max_points: '360', rain_grouping: rainGrouping });
     if (selection.mode === 'dates') {
       query.set('from_date', selection.fromDate);
       query.set('through_date', selection.throughDate);

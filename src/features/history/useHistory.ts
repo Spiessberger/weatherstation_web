@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, ApiError } from '../../api/client';
-import type { DashboardResponse, HistorySummary, HistorySummarySelection, WeatherReading } from '../../api/types';
+import type { DashboardResponse, HistorySummary, HistorySummarySelection, RainGrouping, WeatherReading } from '../../api/types';
 import { stationDate } from '../../format';
 import { periodRange, type HistoryPeriod } from './period';
 
@@ -16,6 +16,11 @@ export function useHistory() {
   const [fromDate, setFromDate] = useState('');
   const [throughDate, setThroughDate] = useState('');
   const [period, setPeriod] = useState<HistoryPeriod | null>('week');
+  const [rainGrouping, setRainGrouping] = useState<RainGrouping>('auto');
+  const [rainLoading, setRainLoading] = useState(false);
+  const [rainError, setRainError] = useState<Error | null>(null);
+  const preferredRainGrouping = useRef<RainGrouping>('auto');
+  const rainRequest = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -25,7 +30,12 @@ export function useHistory() {
   const mounted = useRef(true);
   const lastRequest = useRef<HistorySummarySelection | null>(null);
 
-  const begin = (): RequestToken => {
+  const begin = (changingRange = true): RequestToken => {
+    if (changingRange) {
+      rainRequest.current?.abort();
+      setRainLoading(false);
+      setRainError(null);
+    }
     active.current?.controller.abort();
     const token = { generation: ++generation.current, controller: new AbortController() };
     active.current = token;
@@ -35,7 +45,7 @@ export function useHistory() {
     !token.controller.signal.aborted && generation.current === token.generation;
 
   const fetchRange = async (selection: HistorySummarySelection, token: RequestToken) => {
-    const nextSummary = await api.historySummary(selection, token.controller.signal);
+    const nextSummary = await api.historySummary(selection, token.controller.signal, preferredRainGrouping.current);
     const firstPage = await api.weatherHistory(
       { from: nextSummary.range.from_unix_ms, to: nextSummary.range.to_unix_ms },
       undefined,
@@ -117,6 +127,7 @@ export function useHistory() {
     return () => {
       mounted.current = false;
       active.current?.controller.abort();
+      rainRequest.current?.abort();
       generation.current++;
     };
   }, [initialize]);
@@ -126,7 +137,7 @@ export function useHistory() {
     const last = rows.at(-1);
     if (!last?.id) return;
     const rangeAtStart = summary.range;
-    const token = begin();
+    const token = begin(false);
     setLoadingMore(true);
     setError(null);
     try {
@@ -142,6 +153,32 @@ export function useHistory() {
       if (current(token)) setError(reason as Error);
     } finally {
       if (current(token)) setLoadingMore(false);
+    }
+  };
+
+  const changeRainGrouping = async (grouping: RainGrouping) => {
+    if (!summary || loading) return;
+    preferredRainGrouping.current = grouping;
+    setRainGrouping(grouping);
+    rainRequest.current?.abort();
+    const controller = new AbortController();
+    rainRequest.current = controller;
+    const range = summary.range;
+    setRainLoading(true);
+    setRainError(null);
+    try {
+      const next = await api.historySummary({
+        mode: 'instants', fromUnixMs: range.from_unix_ms, toUnixMs: range.to_unix_ms,
+      }, controller.signal, grouping);
+      if (!mounted.current || controller.signal.aborted) return;
+      setSummary((current) => current && ({
+        ...current, rain_grouping: next.rain_grouping,
+        available_rain_groupings: next.available_rain_groupings, rain_buckets: next.rain_buckets,
+      }));
+    } catch (reason) {
+      if (mounted.current && !controller.signal.aborted) setRainError(reason as Error);
+    } finally {
+      if (mounted.current && !controller.signal.aborted) setRainLoading(false);
     }
   };
 
@@ -167,6 +204,7 @@ export function useHistory() {
     : initialize();
   return {
     dashboard, summary, rows, fromDate, throughDate, period,
+    rainGrouping, rainLoading, rainError, changeRainGrouping,
     setFromDate: (value: string) => { setPeriod(null); setFromDate(value); },
     setThroughDate: (value: string) => { setPeriod(null); setThroughDate(value); },
     loading, loadingMore, error, busy: error instanceof ApiError && error.status === 503,
