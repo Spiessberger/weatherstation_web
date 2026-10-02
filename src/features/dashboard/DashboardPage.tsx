@@ -123,7 +123,6 @@ function StationPanel({ live, weather }: { live: LiveResponse | null; weather: W
     <div class="health-grid">
       <HealthRow icon="signal" label={t('gateway')} ok={gateway?.available ?? false} good={t('connected')} bad={t('disconnected')} detail={gateway ? `${t('restarts')}: ${gateway.restart_count}` : undefined}/>
       <HealthRow icon="database" label={t('database')} ok={live?.storage.database.available ?? false} good={t('healthy')} bad={t('disrupted')} />
-      <HealthRow icon="database" label={t('logs')} ok={live?.storage.logs.available ?? false} good={t('healthy')} bad={t('disrupted')} />
       <HealthRow icon="battery" label={t('battery')} ok={weather ? !weather.battery_low : true} good={weather ? t('batteryGood') : t('unavailable')} bad={t('batteryLow')} />
     </div>
     {weather && <dl class="station-facts">
@@ -154,7 +153,7 @@ export function DashboardPage() {
   const timezone = dashboard?.station_timezone ?? 'Europe/Vienna';
 
   if (!live && !dashboard && !liveError && !dashboardError) return <LoadingDashboard />;
-  const storageBad = live && (!live.storage.database.available || !live.storage.logs.available);
+  const storageBad = live && !live.storage.database.available;
   return <div class="dashboard-page">
     <div class="ambient-orb" aria-hidden="true" />
     <div class="alerts" aria-live="polite">

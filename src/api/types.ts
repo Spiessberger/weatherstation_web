@@ -49,7 +49,6 @@ export interface LiveResponse {
   };
   storage: {
     database: { available: boolean; last_error: string | null };
-    logs: { available: boolean; last_error: string | null };
   };
 }
 

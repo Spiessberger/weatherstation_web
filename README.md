@@ -46,7 +46,6 @@ cargo build --locked --manifest-path ../climate_data_service/Cargo.toml --releas
 ../climate_data_service/target/release/climate-data-service \
   --serial /dev/serial/by-id/YOUR_GATEWAY \
   --database ../climate.sqlite3 \
-  --log-dir ../logs \
   --listen 0.0.0.0:8080 \
   --web-root ./dist
 ```
