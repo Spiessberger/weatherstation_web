@@ -153,7 +153,7 @@ export function HistoryPage() {
   return <div class="history-page">
     <header class="history-header">
       <div><p class="eyebrow"><Icon name="chart"/>{t('history')}</p><h1>{t('historyTitle')}</h1><p>{t('historyIntro')}</p></div>
-      {history.summary && <div class="applied-summary"><span>{t('appliedRange', {
+      {!history.loading && history.summary && <div class="applied-summary"><span>{t('appliedRange', {
         from: history.summary.range.mode === 'instants' ? dateTimeSeconds(history.summary.range.from_unix_ms, locale, history.summary.range.timezone) : calendarDate(history.summary.range.from_date, locale),
         through: history.summary.range.mode === 'instants' ? dateTimeSeconds(history.summary.range.to_unix_ms, locale, history.summary.range.timezone) : calendarDate(history.summary.range.through_date, locale),
       })}</span><span class="observation-count">{t('observations', { count: number(history.summary.sample_count, locale, 0) })}</span></div>}
@@ -177,7 +177,7 @@ export function HistoryPage() {
       {validation && <p class="form-error" role="alert">{t(validation === 'limit' ? 'rangeLimitError' : 'rangeError')}</p>}
     </form>
     {history.error && <div class="alert-banner error" role="alert"><Icon name="alert"/><span>{history.busy ? t('historyBusy') : history.tooLarge ? t('historyTooLarge') : history.invalid ? t('historyInvalid') : t('historyError')}</span>{!history.invalid && <button class="inline-action" type="button" onClick={() => void history.retry()}>{t('retry')}</button>}</div>}
-    {history.loading && !history.summary ? <HistoryLoading/> : history.summary && history.summary.sample_count > 0 ? <>
+    {history.loading ? <HistoryLoading/> : history.summary && history.summary.sample_count > 0 ? <>
       <SummaryCards summary={history.summary}/>
       <Charts summary={history.summary} proposal={zoomProposal} resetVersion={zoomResetVersion} applying={history.loading} onZoom={handleZoom} onApplyZoom={applyZoom} onResetZoom={clearZoom}/>
       <ReadingsTable rows={history.rows} timezone={history.summary.range.timezone} hasMore={history.hasMore} loadingMore={history.loading || history.loadingMore} onLoadMore={() => void history.loadMore()}/>
