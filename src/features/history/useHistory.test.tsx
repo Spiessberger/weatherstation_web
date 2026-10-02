@@ -47,6 +47,40 @@ beforeEach(() => { vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-24T
 afterEach(() => vi.restoreAllMocks());
 
 describe('history request ownership', () => {
+  it.each(['historySummary', 'weatherHistory'] as const)('hides previous range data when %s fails and restores results on retry', async (failedRequest) => {
+    localStorage.setItem('weatherstation.locale', 'en');
+    vi.spyOn(api, 'dashboard').mockResolvedValue(dashboard);
+    const summarySpy = vi.spyOn(api, 'historySummary').mockImplementation(async (selection) => {
+      if (selection.mode !== 'dates') throw new Error('Expected calendar dates');
+      return summary(selection.fromDate, selection.throughDate, 10_000);
+    });
+    const readingsSpy = vi.spyOn(api, 'weatherHistory').mockResolvedValue({ readings: [weather(1, 10_100)] });
+    const page = render(<I18nProvider><HistoryPage/></I18nProvider>);
+    await page.findByRole('table');
+    expect(page.getByRole('region', { name: 'Summary' })).toBeTruthy();
+    expect(page.container.querySelector('.applied-summary')).not.toBeNull();
+
+    const failedSpy = failedRequest === 'historySummary' ? summarySpy : readingsSpy;
+    failedSpy.mockRejectedValueOnce(new Error('offline'));
+    fireEvent.click(page.getByRole('button', { name: 'Next week' }));
+    await page.findByRole('alert');
+    expect(page.queryByRole('table')).toBeNull();
+    expect(page.queryByRole('region', { name: 'Summary' })).toBeNull();
+    expect(page.container.querySelector('.charts-grid')).toBeNull();
+    expect(page.container.querySelector('.applied-summary')).toBeNull();
+    expect(page.queryByText('No readings in this range')).toBeNull();
+
+    fireEvent.click(page.getByRole('button', { name: 'Try again' }));
+    await page.findByRole('table');
+    expect(page.queryByRole('alert')).toBeNull();
+    expect(summarySpy).toHaveBeenLastCalledWith(
+      { mode: 'dates', fromDate: '2026-09-28', throughDate: '2026-10-04' },
+      expect.any(AbortSignal),
+    );
+    page.unmount();
+    localStorage.removeItem('weatherstation.locale');
+  });
+
   it.each([
     ['week', '2026-12-28', '2027-01-03'],
     ['month', '2027-01-01', '2027-01-31'],
@@ -201,6 +235,9 @@ describe('history request ownership', () => {
     await waitFor(() => expect(hook.result.current.rows).toHaveLength(1));
     await act(async () => { await hook.result.current.loadExact(10_250, 10_750); });
     expect(hook.result.current.error?.message).toBe('exact unavailable');
+    expect(hook.result.current.summary).toBeNull();
+    expect(hook.result.current.rows).toEqual([]);
+    expect(hook.result.current.hasMore).toBe(false);
     await act(async () => { await hook.result.current.retry(); });
     expect(summarySpy).toHaveBeenLastCalledWith(
       { mode: 'instants', fromUnixMs: 10_250, toUnixMs: 10_750 },

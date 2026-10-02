@@ -181,6 +181,6 @@ export function HistoryPage() {
       <SummaryCards summary={history.summary}/>
       <Charts summary={history.summary} proposal={zoomProposal} resetVersion={zoomResetVersion} applying={history.loading} onZoom={handleZoom} onApplyZoom={applyZoom} onResetZoom={clearZoom}/>
       <ReadingsTable rows={history.rows} timezone={history.summary.range.timezone} hasMore={history.hasMore} loadingMore={history.loading || history.loadingMore} onLoadMore={() => void history.loadMore()}/>
-    </> : <section class="empty-history"><Icon name="chart" size={48}/><h2>{t('noHistory')}</h2><p>{t('noHistoryDetail')}</p></section>}
+    </> : !history.error && <section class="empty-history"><Icon name="chart" size={48}/><h2>{t('noHistory')}</h2><p>{t('noHistoryDetail')}</p></section>}
   </div>;
 }

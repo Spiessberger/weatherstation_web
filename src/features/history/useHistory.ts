@@ -58,7 +58,12 @@ export function useHistory() {
     try {
       await fetchRange(selection, token);
     } catch (reason) {
-      if (current(token)) setError(reason as Error);
+      if (current(token)) {
+        setSummary(null);
+        setRows([]);
+        setHasMore(false);
+        setError(reason as Error);
+      }
     } finally {
       if (current(token)) setLoading(false);
     }
